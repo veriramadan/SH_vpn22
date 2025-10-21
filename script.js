@@ -1,4 +1,7 @@
-// script.js (v4.0 - Final, User-Friendly)
+// ==========================================================
+// script.js (v6.0 - The Grand Finale, with Ping)
+// ZHStore VPN Configurator
+// ==========================================================
 
 document.addEventListener('DOMContentLoaded', function() {
     // --- PENGATURAN ---
@@ -11,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedCountBtn = document.getElementById('selected-count-btn');
     const ispInfo = document.getElementById('isp-info');
     const locationInfo = document.getElementById('location-info');
+    const workerInfoCard = document.getElementById('worker-info');
     const settingsBtn = document.getElementById('settings-btn');
     const exportBtn = document.getElementById('export-btn');
     const modalOverlay = document.getElementById('settings-modal-overlay');
@@ -31,53 +35,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // FUNGSI INTI & PEMBANTU
     // =======================================================
 
-    /**
-     * [UPGRADE] Fungsi untuk membuat UUID v4 secara acak.
-     */
     function generateUUIDv4() {
         return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
             (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
         );
     }
 
-    /**
-     * [UPGRADE] Fungsi untuk menampilkan notifikasi toast.
-     */
     function showToast(message, isError = false) {
         const toast = document.createElement('div');
         toast.textContent = message;
-        toast.style.position = 'fixed';
-        toast.style.bottom = '90px'; // Di atas footer
-        toast.style.left = '50%';
-        toast.style.transform = 'translateX(-50%)';
-        toast.style.backgroundColor = isError ? 'var(--danger-color)' : 'var(--primary-green)';
-        toast.style.color = 'var(--text-dark)';
-        toast.style.padding = '10px 20px';
-        toast.style.borderRadius = '8px';
-        toast.style.zIndex = '3000';
-        toast.style.opacity = '0';
-        toast.style.transition = 'opacity 0.3s ease';
+        toast.className = 'toast-notification';
+        if (isError) toast.classList.add('error');
         
         document.body.appendChild(toast);
         
-        // Animasi fade-in dan fade-out
-        setTimeout(() => { toast.style.opacity = '1'; }, 10);
+        setTimeout(() => { toast.classList.add('visible'); }, 10);
         setTimeout(() => {
-            toast.style.opacity = '0';
+            toast.classList.remove('visible');
             setTimeout(() => { document.body.removeChild(toast); }, 300);
         }, 2700);
     }
 
     async function initializeApp() {
         detectUserInfo();
-        
-        // [UPGRADE] Panggil fungsi untuk mengisi input dari URL & generate UUID
         populateSettingsFromUrl();
-        
         try {
             serverListContainer.innerHTML = '<p>Mengunduh daftar server...</p>';
             const response = await fetch(PROXY_LIST_URL);
             if (!response.ok) throw new Error(`Gagal mengunduh daftar: ${response.statusText}`);
+            
             const textData = await response.text();
             allServers = parseProxyList(textData);
             populateCountryFilter(allServers);
@@ -93,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const parts = line.split(',');
             if (parts.length < 4) return null;
             return {
-                id: `${parts[0].trim()}:${parts[1].trim()}`, // Buat ID unik
+                id: `${parts[0].trim()}:${parts[1].trim()}`,
                 ip: parts[0].trim(),
                 port: parts[1].trim(),
                 country_code: parts[2].trim(),
@@ -152,72 +138,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 serverListContainer.appendChild(card);
             });
         }
+        pingAllVisibleServers();
     }
 
-    // =======================================================
-    // FUNGSI INTERAKTIVITAS
-    // =======================================================
-
-    function toggleServerSelection(cardElement, serverId) {
-        if (selectedServers.has(serverId)) {
-            selectedServers.delete(serverId);
-            cardElement.classList.remove('selected');
-        } else {
-            selectedServers.add(serverId);
-            cardElement.classList.add('selected');
-        }
-        updateSelectedCount();
-
-        // Jika kita sedang dalam mode "hanya tampilkan yang dipilih" dan pengguna membatalkan pilihan terakhir,
-        // kembali ke mode "tampilkan semua".
-        if (isShowingOnlySelected && selectedServers.size === 0) {
-            isShowingOnlySelected = false;
-            applyAllFilters();
-        }
-    }
-
-    function updateSelectedCount() {
-        selectedCountBtn.textContent = `${selectedServers.size} proxies`;
-    }
-
-    /**
-     * Fungsi utama yang menerapkan semua filter (pencarian, negara)
-     */
-    function applyAllFilters() {
-        const query = searchInput.value.toLowerCase();
-        const selectedCountry = countryFilter.value;
-        
-        let serversToDisplay = allServers;
-
-        // Terapkan filter berdasarkan mode tampilan (semua atau hanya yang dipilih)
-        if (isShowingOnlySelected) {
-            serversToDisplay = allServers.filter(s => selectedServers.has(s.id));
-        }
-
-        // Terapkan filter negara
-        if (selectedCountry !== 'all') {
-            serversToDisplay = serversToDisplay.filter(s => s.country_code === selectedCountry);
-        }
-
-        // Terapkan filter pencarian
-        if (query) {
-            serversToDisplay = serversToDisplay.filter(s => 
-                s.provider.toLowerCase().includes(query) ||
-                s.country_code.toLowerCase().includes(query) ||
-                s.ip.includes(query)
-            );
-        }
-        
-        renderServers(serversToDisplay);
-    }
-
-    /**
-     * [UPGRADE] Mendeteksi info pengguna menggunakan API HTTPS.
-     */
     async function detectUserInfo() {
         try {
-            // Menggunakan API https://ipinfo.io yang lebih andal
-            const response = await fetch('https://ipinfo.io/json?token=YOUR_OPTIONAL_TOKEN');
+            const response = await fetch('https://ipinfo.io/json');
             if (!response.ok) throw new Error('Response not OK');
             const data = await response.json();
             ispInfo.textContent = data.org || 'N/A';
@@ -228,14 +154,7 @@ document.addEventListener('DOMContentLoaded', function() {
             locationInfo.textContent = 'N/A';
         }
     }
-    
-    // =======================================================
-    // FUNGSI EXPORT & MODAL (YANG DI-UPGRADE)
-    // =======================================================
-    
-    /**
-     * [UPGRADE] Mengambil nilai dari URL dan mengisi input Settings.
-     */
+
     function populateSettingsFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const hostFromUrl = urlParams.get('host');
@@ -244,10 +163,119 @@ document.addEventListener('DOMContentLoaded', function() {
             workerHostInput.value = hostFromUrl;
         }
 
-        // Generate dan isi UUID jika kosong
+        if (workerInfoCard) {
+            if (hostFromUrl) {
+                workerInfoCard.querySelector('h4').textContent = hostFromUrl;
+            } else {
+                workerInfoCard.querySelector('h4').textContent = 'Default';
+                workerInfoCard.querySelector('p').textContent = 'Using default worker host';
+            }
+        }
+        
         if (!uuidInput.value) {
             uuidInput.value = generateUUIDv4();
         }
+    }
+
+    // =======================================================
+    // FUNGSI PING
+    // =======================================================
+
+    function pingServer(ip, port, timeout = 3000) {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            const ws = new WebSocket(`wss://${ip}:${port}`);
+            let resolved = false;
+
+            const resolveWith = (ping) => {
+                if (!resolved) {
+                    resolved = true;
+                    if (ws.readyState !== WebSocket.CLOSED) ws.close();
+                    resolve(ping);
+                }
+            };
+
+            ws.onopen = () => resolveWith(Date.now() - startTime);
+            ws.onerror = () => resolveWith(-1);
+            setTimeout(() => resolveWith(-1), timeout);
+        });
+    }
+
+    async function pingAllVisibleServers() {
+        const serverCards = serverListContainer.querySelectorAll('.server-card');
+        
+        const pingPromises = Array.from(serverCards).map(async (card) => {
+            const serverId = card.dataset.serverId;
+            if (!serverId) return;
+            const [ip, port] = serverId.split(':');
+            const pingBadge = card.querySelector('.ping-badge');
+            
+            if (pingBadge) {
+                pingBadge.textContent = '...'; // Reset before pinging
+                pingBadge.style.backgroundColor = '';
+
+                const pingValue = await pingServer(ip, port);
+                
+                requestAnimationFrame(() => {
+                    if (pingValue === -1) {
+                        pingBadge.textContent = 'N/A';
+                        pingBadge.style.backgroundColor = 'var(--danger-color)';
+                    } else {
+                        pingBadge.textContent = `${pingValue} ms`;
+                        if (pingValue < 300) pingBadge.style.backgroundColor = 'var(--primary-green)';
+                        else if (pingValue < 600) pingBadge.style.backgroundColor = '#fdd835';
+                        else pingBadge.style.backgroundColor = '#ff8a80';
+                    }
+                });
+            }
+        });
+
+        await Promise.all(pingPromises);
+    }
+
+    // =======================================================
+    // FUNGSI INTERAKTIVITAS & MODAL
+    // =======================================================
+    
+    function toggleServerSelection(cardElement, serverId) {
+        if (selectedServers.has(serverId)) {
+            selectedServers.delete(serverId);
+            cardElement.classList.remove('selected');
+        } else {
+            selectedServers.add(serverId);
+            cardElement.classList.add('selected');
+        }
+        updateSelectedCount();
+
+        if (isShowingOnlySelected && selectedServers.size === 0) {
+            isShowingOnlySelected = false;
+            applyAllFilters();
+        }
+    }
+
+    function updateSelectedCount() {
+        selectedCountBtn.textContent = `${selectedServers.size} proxies`;
+    }
+
+    function applyAllFilters() {
+        const query = searchInput.value.toLowerCase();
+        const selectedCountry = countryFilter.value;
+        
+        let serversToDisplay = allServers;
+        if (isShowingOnlySelected) {
+            serversToDisplay = allServers.filter(s => selectedServers.has(s.id));
+        }
+        if (selectedCountry !== 'all') {
+            serversToDisplay = serversToDisplay.filter(s => s.country_code === selectedCountry);
+        }
+        if (query) {
+            serversToDisplay = serversToDisplay.filter(s => 
+                s.provider.toLowerCase().includes(query) ||
+                s.country_code.toLowerCase().includes(query) ||
+                s.ip.includes(query)
+            );
+        }
+        renderServers(serversToDisplay);
     }
 
     function exportProxies() {
@@ -284,7 +312,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // [UPGRADE] Salin ke clipboard dan tampilkan toast
         const resultString = outputUris.join('\n');
         navigator.clipboard.writeText(resultString).then(() => {
             showToast("Konfigurasi berhasil disalin!");
@@ -296,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function openSettingsModal() { modalOverlay.classList.add('visible'); }
     function closeSettingsModal() { modalOverlay.classList.remove('visible'); }
-    
+
     // =======================================================
     // EVENT LISTENERS
     // =======================================================
@@ -304,18 +331,10 @@ document.addEventListener('DOMContentLoaded', function() {
     countryFilter.addEventListener('change', applyAllFilters);
     searchInput.addEventListener('input', applyAllFilters);
 
-    // --- LOGIKA BARU: Event listener untuk tombol penghitung ---
     selectedCountBtn.addEventListener('click', () => {
-        // Jika tidak ada server yang dipilih, jangan lakukan apa-apa
         if (selectedServers.size === 0) return;
-        
-        // Ubah state
         isShowingOnlySelected = !isShowingOnlySelected;
-        
-        // Terapkan semua filter lagi dengan state yang baru
         applyAllFilters();
-        
-        // Beri feedback visual pada tombol
         if (isShowingOnlySelected) {
             selectedCountBtn.style.backgroundColor = 'var(--primary-green)';
             selectedCountBtn.style.color = 'var(--text-dark)';
@@ -324,14 +343,17 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedCountBtn.style.color = '';
         }
     });
-    
+
     settingsBtn.addEventListener('click', openSettingsModal);
     settingsDoneBtn.addEventListener('click', closeSettingsModal);
     modalOverlay.addEventListener('click', (event) => {
         if (event.target === modalOverlay) closeSettingsModal();
     });
-    exportBtn.addEventListener('click', exportProxies);
     
+    exportBtn.addEventListener('click', exportProxies);
+    // Bonus: Re-ping saat tombol settings ditekan
+    settingsBtn.addEventListener('click', pingAllVisibleServers);
+
     // Jalankan aplikasi
     initializeApp();
 });
