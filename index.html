@@ -6,8 +6,11 @@
     <title>ZHStore VPN Configurator</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     
-    <!-- Memanggil file CSS eksternal -->
-    <link rel="stylesheet" href="style.css">
+    <script>
+        // Suntik CSS dengan cache busting
+        const cssVersion = new Date().getTime();
+        document.write(`<link rel="stylesheet" href="style.css?v=${cssVersion}">`);
+    </script>
 </head>
 <body>
     <div class="container">
@@ -111,6 +114,10 @@
         </div>
     </div>
     
-    <script src="script.js"></script>
+    <script>
+        // Suntik JavaScript dengan cache busting
+        const jsVersion = new Date().getTime();
+        document.write(`<script src="script.js?v=${jsVersion}" defer><\/script>`);
+    </script>
 </body>
 </html>

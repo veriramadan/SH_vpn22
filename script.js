@@ -182,24 +182,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // =======================================================
 
     function pingServer(ip, port, timeout = 3000) {
-        return new Promise((resolve) => {
-            const startTime = Date.now();
-            const ws = new WebSocket(`wss://${ip}:${port}`);
-            let resolved = false;
+    return new Promise((resolve) => {
+        const startTime = Date.now();
+        // AbortController untuk menangani timeout secara manual
+        const controller = new AbortController();
+        const signal = controller.signal;
+        
+        const timer = setTimeout(() => {
+            controller.abort();
+            resolve(-1);
+        }, timeout);
 
-            const resolveWith = (ping) => {
-                if (!resolved) {
-                    resolved = true;
-                    if (ws.readyState !== WebSocket.CLOSED) ws.close();
-                    resolve(ping);
-                }
-            };
-
-            ws.onopen = () => resolveWith(Date.now() - startTime);
-            ws.onerror = () => resolveWith(-1);
-            setTimeout(() => resolveWith(-1), timeout);
+        // Kita coba fetch port HTTP atau HTTPS. Kita gunakan http karena lebih mungkin diizinkan.
+        fetch(`http://${ip}:${port}/favicon.ico`, { 
+            method: 'HEAD', // Hanya minta header, tidak perlu download body
+            mode: 'no-cors', // Penting untuk menghindari error CORS
+            signal: signal,
+            cache: 'no-store'
+        })
+        .then(() => {
+            // Berhasil (atau diblokir CORS setelah koneksi dibuat, yang sudah cukup)
+            const endTime = Date.now();
+            clearTimeout(timer);
+            resolve(endTime - startTime);
+        })
+        .catch(() => {
+            // Gagal total
+            clearTimeout(timer);
+            resolve(-1);
         });
-    }
+    });
+}
 
     async function pingAllVisibleServers() {
         const serverCards = serverListContainer.querySelectorAll('.server-card');
