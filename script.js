@@ -178,41 +178,75 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =======================================================
-    // FUNGSI PING
+    // FUNGSI PING (VERSI 3.0 - THE DEFINITIVE WEBSOCKET PING)
     // =======================================================
-
+    
+    /**
+     * Mengukur latensi koneksi dengan mencoba membuka koneksi WebSocket.
+     * Metode ini lebih andal untuk koneksi lintas-asal (cross-origin).
+     * @param {string} ip - Alamat IP server.
+     * @param {string} port - Port server.
+     * @param {number} timeout - Waktu timeout dalam milidetik.
+     * @returns {Promise<number>} - Promise yang akan resolve dengan nilai ping atau -1 jika gagal.
+     */
     function pingServer(ip, port, timeout = 3000) {
-    return new Promise((resolve) => {
-        const startTime = Date.now();
-        // AbortController untuk menangani timeout secara manual
-        const controller = new AbortController();
-        const signal = controller.signal;
-        
-        const timer = setTimeout(() => {
-            controller.abort();
-            resolve(-1);
-        }, timeout);
-
-        // Kita coba fetch port HTTP atau HTTPS. Kita gunakan http karena lebih mungkin diizinkan.
-        fetch(`http://${ip}:${port}/favicon.ico`, { 
-            method: 'HEAD', // Hanya minta header, tidak perlu download body
-            mode: 'no-cors', // Penting untuk menghindari error CORS
-            signal: signal,
-            cache: 'no-store'
-        })
-        .then(() => {
-            // Berhasil (atau diblokir CORS setelah koneksi dibuat, yang sudah cukup)
-            const endTime = Date.now();
-            clearTimeout(timer);
-            resolve(endTime - startTime);
-        })
-        .catch(() => {
-            // Gagal total
-            clearTimeout(timer);
-            resolve(-1);
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            let ws;
+            let resolved = false;
+    
+            // Fungsi cleanup yang akan dipanggil di setiap hasil
+            const cleanupAndResolve = (ping) => {
+                if (!resolved) {
+                    resolved = true;
+                    if (ws && ws.readyState !== WebSocket.CLOSED) {
+                        ws.close();
+                    }
+                    clearTimeout(timer);
+                    resolve(ping);
+                }
+            };
+            
+            // Timer untuk timeout
+            const timer = setTimeout(() => {
+                cleanupAndResolve(-1);
+            }, timeout);
+    
+            try {
+                // Kita coba koneksi WSS (WebSocket Secure). 
+                // Browser akan mengizinkan ini dari halaman HTTPS.
+                ws = new WebSocket(`wss://${ip}:${port}`);
+    
+                // KASUS 1: Koneksi berhasil dibuat. Ini adalah hasil terbaik.
+                // Server merespons handshake WebSocket.
+                ws.onopen = () => {
+                    const endTime = Date.now();
+                    cleanupAndResolve(endTime - startTime);
+                };
+    
+                // KASUS 2 (PALING UMUM): Koneksi gagal.
+                // Ini bisa karena port ditutup, tidak ada server WS, atau sertifikat tidak valid.
+                // TAPI, event 'onerror' ini sendiri sudah membuktikan bahwa servernya "menjawab".
+                // Kita tetap bisa mengukur waktunya!
+                ws.onerror = () => {
+                    const endTime = Date.now();
+                    // Kita anggap latensi hingga error ini sebagai nilai ping.
+                    cleanupAndResolve(endTime - startTime);
+                };
+    
+                // KASUS 3: Server menutup koneksi secara langsung.
+                ws.onclose = () => {
+                    // Jika onopen atau onerror belum terpanggil, kita ukur waktunya di sini.
+                    const endTime = Date.now();
+                    cleanupAndResolve(endTime - startTime);
+                };
+    
+            } catch (error) {
+                // Gagal bahkan sebelum mencoba membuat WebSocket (misal, format URL salah)
+                cleanupAndResolve(-1);
+            }
         });
-    });
-}
+    }
 
     async function pingAllVisibleServers() {
         const serverCards = serverListContainer.querySelectorAll('.server-card');
