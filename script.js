@@ -1,6 +1,6 @@
 // ==========================================================
 // script.js (v6.0 - The Grand Finale, with Ping)
-// ZHStore VPN Configurator
+// Verysh22 Configurator
 // ==========================================================
 
 document.addEventListener('DOMContentLoaded', function() {
