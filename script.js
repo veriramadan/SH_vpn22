@@ -1,31 +1,25 @@
 // ==========================================================
-// script.js (v10.2 - Filter Persistence)
-// Verysh22 Configurator
+// script.js (v6.0 - The Grand Finale, with Ping)
+// ZHStore VPN Configurator
 // ==========================================================
 
 document.addEventListener('DOMContentLoaded', function() {
     // --- PENGATURAN ---
     const PROXY_LIST_URL = 'https://raw.githubusercontent.com/FoolVPN-ID/Nautica/main/proxyList.txt';
-    const SERVERS_PER_PAGE = 10;
 
     // --- Referensi Elemen DOM ---
     const serverListContainer = document.getElementById('server-list');
-    const paginationContainer = document.getElementById('pagination-container');
     const countryFilter = document.getElementById('country-filter');
+    const searchInput = document.getElementById('search-input');
+    const selectedCountBtn = document.getElementById('selected-count-btn');
     const ispInfo = document.getElementById('isp-info');
     const locationInfo = document.getElementById('location-info');
     const workerInfoCard = document.getElementById('worker-info');
-    const modalOverlay = document.getElementById('settings-modal-overlay');
-    const settingsDoneBtn = document.getElementById('settings-done-btn');
-    const searchInput = document.getElementById('search-input');
-    
-    // ▼▼▼ VARIABEL FAB DIHAPUS ▼▼▼
-    // const fabContainer = document.getElementById('fab-container');
-    // const fabMainBtn = document.getElementById('fab-main-btn');
-    
     const settingsBtn = document.getElementById('settings-btn');
     const exportBtn = document.getElementById('export-btn');
-    const selectedCountBadge = document.getElementById('selected-count-badge');
+    const modalOverlay = document.getElementById('settings-modal-overlay');
+    const settingsDoneBtn = document.getElementById('settings-done-btn');
+
     const bugCdnInput = document.getElementById('bug-cdn-input');
     const workerHostInput = document.getElementById('worker-host-input');
     const uuidInput = document.getElementById('uuid-input');
@@ -34,8 +28,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- State Aplikasi ---
     let allServers = [];
-    let filteredServers = [];
-    let currentPage = 1;
     let selectedServers = new Set();
     let isShowingOnlySelected = false;
 
@@ -54,7 +46,9 @@ document.addEventListener('DOMContentLoaded', function() {
         toast.textContent = message;
         toast.className = 'toast-notification';
         if (isError) toast.classList.add('error');
+        
         document.body.appendChild(toast);
+        
         setTimeout(() => { toast.classList.add('visible'); }, 10);
         setTimeout(() => {
             toast.classList.remove('visible');
@@ -72,35 +66,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const textData = await response.text();
             allServers = parseProxyList(textData);
-            filteredServers = [...allServers];
             populateCountryFilter(allServers);
-
-            // BARU: Ambil dan terapkan filter negara yang tersimpan
-            const savedCountry = localStorage.getItem('selectedCountry');
-            if (savedCountry) {
-                countryFilter.value = savedCountry;
-            }
-            
-            applyAllFilters(); // Panggil applyAllFilters di sini agar filter langsung diterapkan
-
+            renderServers(allServers);
         } catch (error) {
             console.error("Initialization Error:", error);
             serverListContainer.innerHTML = `<p style="color: var(--danger-color);">Gagal memuat data server. <br><small>${error.message}</small></p>`;
-            paginationContainer.style.display = 'none';
         }
-    }
-
-    function displayCurrentPage() {
-        serverListContainer.innerHTML = '';
-        window.scrollTo(0, 0);
-
-        const startIndex = (currentPage - 1) * SERVERS_PER_PAGE;
-        const endIndex = startIndex + SERVERS_PER_PAGE;
-        const pageServers = filteredServers.slice(startIndex, endIndex);
-
-        renderServers(pageServers);
-        renderPaginationControls();
-        pingVisibleServers(pageServers);
     }
 
     function parseProxyList(text) {
@@ -128,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderServers(serversToRender) {
+        serverListContainer.innerHTML = '';
         if (serversToRender.length === 0) {
             serverListContainer.innerHTML = '<p>Tidak ada server yang ditemukan.</p>';
             return;
@@ -166,73 +138,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 serverListContainer.appendChild(card);
             });
         }
+        pingAllVisibleServers();
     }
-    
-    function renderPaginationControls() {
-        paginationContainer.innerHTML = '';
-        const totalPages = Math.ceil(filteredServers.length / SERVERS_PER_PAGE);
-        const maxPagesToShow = 5;
-
-        if (totalPages <= 1) return;
-
-        const prevButton = document.createElement('button');
-        prevButton.className = 'page-btn';
-        prevButton.textContent = '<';
-        prevButton.disabled = currentPage === 1;
-        prevButton.addEventListener('click', () => {
-            if (currentPage > 1) {
-                currentPage--;
-                displayCurrentPage();
-            }
-        });
-        paginationContainer.appendChild(prevButton);
-
-        let startPage, endPage;
-        if (totalPages <= maxPagesToShow) {
-            startPage = 1;
-            endPage = totalPages;
-        } else {
-            const maxPagesBefore = Math.floor((maxPagesToShow - 1) / 2);
-            const maxPagesAfter = Math.ceil((maxPagesToShow - 1) / 2);
-            if (currentPage <= maxPagesBefore) {
-                startPage = 1;
-                endPage = maxPagesToShow;
-            } else if (currentPage + maxPagesAfter >= totalPages) {
-                startPage = totalPages - maxPagesToShow + 1;
-                endPage = totalPages;
-            } else {
-                startPage = currentPage - maxPagesBefore;
-                endPage = currentPage + maxPagesAfter;
-            }
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            const pageButton = document.createElement('button');
-            pageButton.className = 'page-btn';
-            pageButton.textContent = i;
-            if (i === currentPage) {
-                pageButton.classList.add('active');
-            }
-            pageButton.addEventListener('click', () => {
-                currentPage = i;
-                displayCurrentPage();
-            });
-            paginationContainer.appendChild(pageButton);
-        }
-
-        const nextButton = document.createElement('button');
-        nextButton.className = 'page-btn';
-        nextButton.textContent = '>';
-        nextButton.disabled = currentPage === totalPages;
-        nextButton.addEventListener('click', () => {
-            if (currentPage < totalPages) {
-                currentPage++;
-                displayCurrentPage();
-            }
-        });
-        paginationContainer.appendChild(nextButton);
-    }
-
 
     async function detectUserInfo() {
         try {
@@ -251,18 +158,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function populateSettingsFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const hostFromUrl = urlParams.get('host');
-        let workerHostValue = 'Default';
 
         if (hostFromUrl) {
             workerHostInput.value = hostFromUrl;
-            workerHostValue = hostFromUrl;
-        } else {
-            workerHostInput.value = 'cfdarkryco.github.io'; 
-            workerHostValue = 'cfdarkryco.github.io';
         }
 
         if (workerInfoCard) {
-            workerInfoCard.querySelector('h4').textContent = workerHostValue;
+            if (hostFromUrl) {
+                workerInfoCard.querySelector('h4').textContent = hostFromUrl;
+            } else {
+                workerInfoCard.querySelector('h4').textContent = 'Default';
+                workerInfoCard.querySelector('p').textContent = 'Using default worker host';
+            }
         }
         
         if (!uuidInput.value) {
@@ -271,59 +178,108 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =======================================================
-    // FUNGSI PING
+    // FUNGSI PING (VERSI 3.0 - THE DEFINITIVE WEBSOCKET PING)
     // =======================================================
+    
+    /**
+     * Mengukur latensi koneksi dengan mencoba membuka koneksi WebSocket.
+     * Metode ini lebih andal untuk koneksi lintas-asal (cross-origin).
+     * @param {string} ip - Alamat IP server.
+     * @param {string} port - Port server.
+     * @param {number} timeout - Waktu timeout dalam milidetik.
+     * @returns {Promise<number>} - Promise yang akan resolve dengan nilai ping atau -1 jika gagal.
+     */
     function pingServer(ip, port, timeout = 3000) {
         return new Promise((resolve) => {
             const startTime = Date.now();
             let ws;
             let resolved = false;
+    
+            // Fungsi cleanup yang akan dipanggil di setiap hasil
             const cleanupAndResolve = (ping) => {
                 if (!resolved) {
                     resolved = true;
-                    if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
+                    if (ws && ws.readyState !== WebSocket.CLOSED) {
+                        ws.close();
+                    }
                     clearTimeout(timer);
                     resolve(ping);
                 }
             };
-            const timer = setTimeout(() => { cleanupAndResolve(-1); }, timeout);
+            
+            // Timer untuk timeout
+            const timer = setTimeout(() => {
+                cleanupAndResolve(-1);
+            }, timeout);
+    
             try {
+                // Kita coba koneksi WSS (WebSocket Secure). 
+                // Browser akan mengizinkan ini dari halaman HTTPS.
                 ws = new WebSocket(`wss://${ip}:${port}`);
-                ws.onopen = () => cleanupAndResolve(Date.now() - startTime);
-                ws.onerror = () => cleanupAndResolve(Date.now() - startTime);
-                ws.onclose = () => cleanupAndResolve(Date.now() - startTime);
+    
+                // KASUS 1: Koneksi berhasil dibuat. Ini adalah hasil terbaik.
+                // Server merespons handshake WebSocket.
+                ws.onopen = () => {
+                    const endTime = Date.now();
+                    cleanupAndResolve(endTime - startTime);
+                };
+    
+                // KASUS 2 (PALING UMUM): Koneksi gagal.
+                // Ini bisa karena port ditutup, tidak ada server WS, atau sertifikat tidak valid.
+                // TAPI, event 'onerror' ini sendiri sudah membuktikan bahwa servernya "menjawab".
+                // Kita tetap bisa mengukur waktunya!
+                ws.onerror = () => {
+                    const endTime = Date.now();
+                    // Kita anggap latensi hingga error ini sebagai nilai ping.
+                    cleanupAndResolve(endTime - startTime);
+                };
+    
+                // KASUS 3: Server menutup koneksi secara langsung.
+                ws.onclose = () => {
+                    // Jika onopen atau onerror belum terpanggil, kita ukur waktunya di sini.
+                    const endTime = Date.now();
+                    cleanupAndResolve(endTime - startTime);
+                };
+    
             } catch (error) {
+                // Gagal bahkan sebelum mencoba membuat WebSocket (misal, format URL salah)
                 cleanupAndResolve(-1);
             }
         });
     }
 
-    async function pingVisibleServers(serversToPing) {
-        const pingPromises = serversToPing.map(async (server) => {
-            const card = serverListContainer.querySelector(`.server-card[data-server-id="${server.id}"]`);
-            if (!card) return;
-
+    async function pingAllVisibleServers() {
+        const serverCards = serverListContainer.querySelectorAll('.server-card');
+        
+        const pingPromises = Array.from(serverCards).map(async (card) => {
+            const serverId = card.dataset.serverId;
+            if (!serverId) return;
+            const [ip, port] = serverId.split(':');
             const pingBadge = card.querySelector('.ping-badge');
+            
             if (pingBadge) {
-                 const [ip, port] = server.id.split(':');
-                 const pingValue = await pingServer(ip, port);
-                 
-                 requestAnimationFrame(() => {
+                pingBadge.textContent = '...'; // Reset before pinging
+                pingBadge.style.backgroundColor = '';
+
+                const pingValue = await pingServer(ip, port);
+                
+                requestAnimationFrame(() => {
                     if (pingValue === -1) {
                         pingBadge.textContent = 'N/A';
                         pingBadge.style.backgroundColor = 'var(--danger-color)';
                     } else {
                         pingBadge.textContent = `${pingValue} ms`;
-                        if (pingValue < 300) pingBadge.style.backgroundColor = '#4caf50';
+                        if (pingValue < 300) pingBadge.style.backgroundColor = 'var(--primary-green)';
                         else if (pingValue < 600) pingBadge.style.backgroundColor = '#fdd835';
                         else pingBadge.style.backgroundColor = '#ff8a80';
                     }
                 });
             }
         });
+
         await Promise.all(pingPromises);
     }
-    
+
     // =======================================================
     // FUNGSI INTERAKTIVITAS & MODAL
     // =======================================================
@@ -341,13 +297,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isShowingOnlySelected && selectedServers.size === 0) {
             isShowingOnlySelected = false;
             applyAllFilters();
-            selectedCountBadge.style.backgroundColor = '';
-            selectedCountBadge.style.color = '';
         }
     }
 
     function updateSelectedCount() {
-        selectedCountBadge.textContent = selectedServers.size;
+        selectedCountBtn.textContent = `${selectedServers.size} proxies`;
     }
 
     function applyAllFilters() {
@@ -368,10 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 s.ip.includes(query)
             );
         }
-
-        filteredServers = serversToDisplay;
-        currentPage = 1;
-        displayCurrentPage();
+        renderServers(serversToDisplay);
     }
 
     function exportProxies() {
@@ -379,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast("Pilih setidaknya satu server!", true);
             return;
         }
+
         const bugCdn = bugCdnInput.value.trim();
         const workerHost = workerHostInput.value.trim();
         const uuid = uuidInput.value.trim();
@@ -387,6 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
             openSettingsModal();
             return;
         }
+        
         let outputUris = [];
         selectedServers.forEach(serverId => {
             const server = allServers.find(s => s.id === serverId);
@@ -394,13 +347,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 const path = `/${server.ip}-${server.port}`;
                 const name = `${server.country_code} ${server.provider} [${server.ip}]`;
                 const useTls = tlsSelect.value === 'true';
+                
                 const uri = `${protocolSelect.value}://${uuid}@${bugCdn}:${useTls ? 443 : 80}` +
-                            `?encryption=none&type=ws&host=${workerHost}&security=${useTls ? 'tls' : 'none'}` +
-                            `&sni=${workerHost}&path=${encodeURIComponent(path)}#${encodeURIComponent(name)}`;
+                            `?encryption=none&type=ws` +
+                            `&host=${workerHost}` +
+                            `&security=${useTls ? 'tls' : 'none'}` +
+                            `&sni=${workerHost}` +
+                            `&path=${encodeURIComponent(path)}` +
+                            `#${encodeURIComponent(name)}`;
                 outputUris.push(uri);
             }
         });
-        navigator.clipboard.writeText(outputUris.join('\n')).then(() => {
+
+        const resultString = outputUris.join('\n');
+        navigator.clipboard.writeText(resultString).then(() => {
             showToast("Konfigurasi berhasil disalin!");
         }).catch(err => {
             console.error('Gagal menyalin: ', err);
@@ -415,28 +375,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // EVENT LISTENERS
     // =======================================================
     
-    countryFilter.addEventListener('change', () => {
-        // BARU: Simpan pilihan negara setiap kali diubah
-        localStorage.setItem('selectedCountry', countryFilter.value);
-        applyAllFilters();
-    });
+    countryFilter.addEventListener('change', applyAllFilters);
     searchInput.addEventListener('input', applyAllFilters);
 
-    // ▼▼▼ EVENT LISTENER FAB DIHAPUS ▼▼▼
-    // fabMainBtn.addEventListener('click', () => {
-    //     fabContainer.classList.toggle('active');
-    // });
-
-    selectedCountBadge.addEventListener('click', () => {
+    selectedCountBtn.addEventListener('click', () => {
         if (selectedServers.size === 0) return;
         isShowingOnlySelected = !isShowingOnlySelected;
         applyAllFilters();
         if (isShowingOnlySelected) {
-            selectedCountBadge.style.backgroundColor = '#4caf50';
-            selectedCountBadge.style.color = 'var(--text-dark)';
+            selectedCountBtn.style.backgroundColor = 'var(--primary-green)';
+            selectedCountBtn.style.color = 'var(--text-dark)';
         } else {
-            selectedCountBadge.style.backgroundColor = '';
-            selectedCountBadge.style.color = '';
+            selectedCountBtn.style.backgroundColor = '';
+            selectedCountBtn.style.color = '';
         }
     });
 
@@ -447,6 +398,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     exportBtn.addEventListener('click', exportProxies);
+    // Bonus: Re-ping saat tombol settings ditekan
+    settingsBtn.addEventListener('click', pingAllVisibleServers);
 
     // Jalankan aplikasi
     initializeApp();
